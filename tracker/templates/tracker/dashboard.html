@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GainsHub | Django Tracker</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --secondary: #10b981;
+            --bg: #0f172a;
+            --card: #1e293b;
+            --text: #f8fafc;
+            --border: #334155;
+        }
+        body { background: var(--bg); color: var(--text); font-family: sans-serif; margin: 0; padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .card { background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid var(--border); }
+        .progress-bar { height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; margin: 10px 0; }
+        .progress-fill { height: 100%; background: var(--primary); transition: width 0.3s; }
+        input { width: 100%; padding: 10px; margin: 5px 0; background: var(--bg); border: 1px solid var(--border); color: white; border-radius: 6px; }
+        button { width: 100%; padding: 10px; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        .search-item { background: #00000033; padding: 10px; margin-top: 5px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+        .local-badge { font-size: 10px; background: var(--secondary); padding: 2px 4px; border-radius: 3px; }
+        .meal-item { display: flex; justify-content: space-between; border-bottom: 1px solid var(--border); padding: 10px 0; }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h1>GainsHub</h1>
+            <div style="text-align: right;">
+                <span style="opacity: 0.6;">Welcome,</span> <strong>{{ profile.name }}</strong> | 
+                <a href="{% url 'logout' %}" style="color: #ef4444; text-decoration: none; font-size: 0.8rem;">Logout</a>
+            </div>
+        </div>
+        
+        <!-- Health Analysis Card -->
+        <div class="card" style="margin-bottom: 20px; border-left: 4px solid var(--secondary);">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <h3>Smart Analysis</h3>
+                    <p>Your BMI: <strong>{{ bmi }}</strong> (<span style="color: var(--secondary)">{{ status }}</span>)</p>
+                    <p style="font-size: 0.9rem; color: #94a3b8; line-height: 1.4;">{{ recommendation }}</p>
+                </div>
+                <div style="text-align: right; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px;">
+                    <p style="margin: 0; font-size: 0.8rem; opacity: 0.6;">CURRENT STATS</p>
+                    <p style="margin: 5px 0;">Age: {{ profile.age }} yrs</p>
+                    <p style="margin: 5px 0;">Height: {{ profile.height }} cm</p>
+                    <p style="margin: 5px 0;">Weight: {{ profile.current_weight }} kg</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <!-- Progress -->
+            <div class="card">
+                <h3>Daily Progress</h3>
+                <p>Calories: {{ totals.calories }} / {{ goals.calories }} kcal</p>
+                <div class="progress-bar"><div class="progress-fill" style="width: {{ progress.calories }}%"></div></div>
+                <p>Protein: {{ totals.protein }} / {{ goals.protein }} g</p>
+                <div class="progress-bar"><div class="progress-fill" style="width: {{ progress.protein }}%; background: var(--secondary)"></div></div>
+            </div>
+
+            <!-- Smart Logger -->
+            <div class="card">
+                <h3>Log Indian Food</h3>
+                <div style="display: flex; gap: 5px;">
+                    <input type="text" id="foodSearch" placeholder="e.g. Dal, Paneer, Roti...">
+                    <button id="searchBtn" style="width: auto;">Search</button>
+                </div>
+                <input type="number" id="foodWeight" value="100" placeholder="Weight in grams">
+                <div id="results"></div>
+
+                <!-- Hidden form to submit to Django -->
+                <form id="logForm" action="{% url 'log_meal' %}" method="POST" style="display:none;">
+                    {% csrf_token %}
+                    <input type="hidden" name="name" id="formName">
+                    <input type="hidden" name="weight" id="formWeight">
+                    <input type="hidden" name="calories" id="formCal">
+                    <input type="hidden" name="protein" id="formProt">
+                    <input type="hidden" name="carbs" id="formCarbs">
+                    <input type="hidden" name="fat" id="formFat">
+                </form>
+            </div>
+
+            <!-- Recent Meals -->
+            <div class="card" style="grid-column: 1 / -1;">
+                <h3>Today's Meals</h3>
+                {% for meal in meals %}
+                <div class="meal-item">
+                    <div>
+                        <strong>{{ meal.name }}</strong><br>
+                        <small>{{ meal.weight }}g • {{ meal.protein }}g Protein</small>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <span>{{ meal.calories }} kcal</span>
+                        <a href="{% url 'delete_meal' meal.id %}" style="color: #ef4444; text-decoration: none;">&times;</a>
+                    </div>
+                </div>
+                {% empty %}
+                <p style="opacity: 0.5;">No meals logged yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const INDIAN_DB = [
+            { name: 'Roti / Chapati', cal: 260, prot: 10, carbs: 55, fat: 3 },
+            { name: 'Dal (Lentils)', cal: 116, prot: 8, carbs: 20, fat: 1 },
+            { name: 'Paneer (Cottage Cheese)', cal: 265, prot: 18, carbs: 1, fat: 20 },
+            { name: 'Dahi (Curd)', cal: 98, prot: 3.5, carbs: 4.5, fat: 7.5 },
+            { name: 'Rice (Basmati)', cal: 130, prot: 2.7, carbs: 28, fat: 0.3 },
+            { name: 'Chicken Curry', cal: 180, prot: 22, carbs: 3, fat: 9 },
+            { name: 'Egg (Boiled)', cal: 155, prot: 13, carbs: 1.1, fat: 11 }
+        ];
+
+        document.getElementById('searchBtn').onclick = async () => {
+            const query = document.getElementById('foodSearch').value.toLowerCase();
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = 'Searching...';
+
+            const local = INDIAN_DB.filter(f => f.name.toLowerCase().includes(query));
+            
+            try {
+                const res = await fetch(`https://in.openfoodfacts.org/cgi/search.pl?search_terms=${query}&json=1&page_size=3`);
+                const data = await res.json();
+                const global = (data.products || []).map(p => ({
+                    name: p.product_name,
+                    cal: p.nutriments['energy-kcal_100g'] || 0,
+                    prot: p.nutriments.proteins_100g || 0,
+                    carbs: p.nutriments.carbohydrates_100g || 0,
+                    fat: p.nutriments.fat_100g || 0
+                })).filter(p => p.cal > 0);
+
+                renderResults([...local.map(l => ({...l, isLocal: true})), ...global]);
+            } catch (e) {
+                renderResults(local.map(l => ({...l, isLocal: true})));
+            }
+        };
+
+        function renderResults(items) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '';
+            items.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'search-item';
+                div.innerHTML = `
+                    <div>
+                        <b>${item.name}</b> ${item.isLocal ? '<span class="local-badge">OFFLINE</span>' : ''}<br>
+                        <small>${item.cal} kcal / 100g</small>
+                    </div>
+                    <span>+</span>
+                `;
+                div.onclick = () => submitMeal(item);
+                resultsDiv.appendChild(div);
+            });
+        }
+
+        function submitMeal(item) {
+            document.getElementById('formName').value = item.name;
+            document.getElementById('formWeight').value = document.getElementById('foodWeight').value;
+            document.getElementById('formCal').value = item.cal;
+            document.getElementById('formProt').value = item.prot;
+            document.getElementById('formCarbs').value = item.carbs;
+            document.getElementById('formFat').value = item.fat;
+            document.getElementById('logForm').submit();
+        }
+    </script>
+</body>
+</html>
